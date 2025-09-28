@@ -1,5 +1,4 @@
 const { EventEmitter } = require("node:events");
-const { VoiceRoom } = require("./VoiceRoom");
 
 class MediasoupWebRtcClient {
     constructor(userId, roomId, websocket, room) {
@@ -67,10 +66,6 @@ class MediasoupWebRtcClient {
 
     isProducingVideo() {
         return !!this.videoProducer;
-    }
-
-    async onJoinedRoom() {
-        await global.onClientJoinedRoom();
     }
 
     async publishTrack(type, ssrc) {

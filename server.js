@@ -1,15 +1,32 @@
 const ws = require('ws');
 const MediasoupSignalingDelegate = require('./webrtc/MediasoupSignalingDelegate');
-const WebSocket = new ws.WebSocket('ws://localhost:4444');
 const os = require('os');
 const minPort = 5000;
 const maxPort = 6000;
 const mediaserver = new MediasoupSignalingDelegate();
 
-const SPEAKING_THROTTLE_MS = 150; 
-
-let ip_address;
 let users = new Map();
+
+if (process.argv.length < 3) {
+    console.log(`[MEDIA RELAY CLIENT] **Error: Connection URL required.**
+
+You must specify the WebSocket URL for the media relay signaling server.
+
+**Proper Usage:**
+node server.js <WebSocket_URL> [use_public_ip_flag]
+
+- **<WebSocket_URL>**: The URL of the server to connect to (e.g., ws://127.0.0.1:8080).
+- **[use_public_ip_flag]**: An optional argument. Pass **true** to use the machine's public IP address for relaying instead of a local one.`);
+    return;
+}
+
+let url = process.argv[2];
+let use_public_ip = process.argv[3] && process.argv[3].toLowerCase() === 'true';
+let internal_config;
+
+console.log(`[MEDIA RELAY CLIENT] Connecting to ${url}...`);
+
+const WebSocket = new ws.WebSocket(url);
 
 global.MEDIA_CODECS = [
     {
@@ -118,15 +135,17 @@ function getIPAddress() {
 }
 
 WebSocket.on('open', async () => {
-    console.log(`[MEDIA RELAY CLIENT] Connected to central server!`);
+    console.log(`[MEDIA RELAY CLIENT] Connected to the media relay signaling server!`);
 
     let ip_address = getIPAddress();
-    //let try_get_ip = await fetch("https://checkip.amazonaws.com");
 
-    //ip_address = await try_get_ip.text();
+    if (use_public_ip) {
+        let try_get_ip = await fetch("https://checkip.amazonaws.com");
+
+        ip_address = await try_get_ip.text();
+    } 
 
     await mediaserver.start(ip_address, minPort, maxPort, true);
-
 
     WebSocket.send(JSON.stringify({
         op: "IDENTIFY",
@@ -146,7 +165,11 @@ WebSocket.on('message', async (data) => {
     if (json.op === 'ALRIGHT') {
         let location = json.d.location;
 
-        console.log(`[MEDIA RELAY CLIENT] Identified with central server! There are ${location - 1} other server(s) in front of us.`);
+        internal_config = json.d.config;
+
+        console.log(`[MEDIA RELAY CLIENT] Identified with media relay signaling server! There are ${location - 1} other server(s) in front of us.`);
+        console.log(`[MEDIA RELAY CLIENT] Received configuration from the media relay signaling server!`);
+        console.log(JSON.stringify(internal_config));
     } else if (json.op === 'HEARTBEAT_INFO') {
         let heartbeat_interval = json.d.heartbeat_interval;
 
@@ -228,7 +251,7 @@ WebSocket.on('message', async (data) => {
             return;
         }
 
-        if (user.is_speaking === speaking && (now - user.last_speaking_update) < SPEAKING_THROTTLE_MS) {
+        if (user.is_speaking === speaking && (now - user.last_speaking_update) < internal_config.speaking_throttle_ms) {
             return;
         }
 

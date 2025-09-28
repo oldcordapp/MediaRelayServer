@@ -128,7 +128,7 @@ class MediasoupSignalingDelegate {
         client.webrtcConnected = true;
         client.emitter.emit("connected");
 
-        await client.onJoinedRoom();
+        await global.onClientJoinedRoom(client);
 
         const iceParameters = transport.iceParameters;
         const iceCandidates = transport.iceCandidates;
